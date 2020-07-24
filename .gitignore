@@ -60,4 +60,4 @@ build/
 debug/
 dist/
 ProyectoFinal.X/nbproject/Makefile-*
-*.map
+*.map 
