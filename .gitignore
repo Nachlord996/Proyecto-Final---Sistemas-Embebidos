@@ -50,3 +50,14 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+*.d
+*.obj
+.o
+Proyecto.X/nbproject/private/
+Proyecto.X/nbproject/Package-.bash
+build/
+debug/
+dist/
+Proyecto.X/nbproject/Makefile-*
+*.map
