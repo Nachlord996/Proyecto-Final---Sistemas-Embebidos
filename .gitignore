@@ -54,10 +54,10 @@ dkms.conf
 *.d
 *.obj
 .o
-Proyecto.X/nbproject/private/
-Proyecto.X/nbproject/Package-.bash
+ProyectoFinal.X/nbproject/private/
+ProyectoFinal.X/nbproject/Package-.bash
 build/
 debug/
 dist/
-Proyecto.X/nbproject/Makefile-*
+ProyectoFinal.X/nbproject/Makefile-*
 *.map
