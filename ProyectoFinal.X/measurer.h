@@ -67,8 +67,9 @@ extern "C" {
      */
     #define STR_END "\0"
     #define INVALID_FRAME_MESSAGE "Error en conexion con satelites"
-    
+
     SemaphoreHandle_t semaphore;
+    
 
     // *****************************************************************************
     // *****************************************************************************
@@ -161,6 +162,8 @@ extern "C" {
      */
     
     bool measuringTasksHandler(bool);
+    void manageLEDs(void *p_param);
+    void measureTemp(void *p_param); 
 
     /* Provide C++ Compatibility */
 #ifdef __cplusplus

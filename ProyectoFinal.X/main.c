@@ -66,16 +66,14 @@
 int main(void) {
 
     SYSTEM_Initialize();
-    buttonPressed = false;
-    isPhoneSet = false;
     initializeStorage();
-
     semaphore = xSemaphoreCreateBinary();
     semaphoreUSB = xSemaphoreCreateBinary();
-
-
+    
     /* Create the tasks defined within this file. */
     xTaskCreate(isButtonPressed, "checkingButtonState", configMINIMAL_STACK_SIZE, &measuringTasksHandler, tskIDLE_PRIORITY + 1, NULL);
+    xTaskCreate(measureTemp, "measuringTemperature", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY + 1, NULL);
+    xTaskCreate(manageLEDs, "manageLeds", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY + 1, NULL);
     xTaskCreate(SIM808_initModule, "modemIni", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY + 2, &modemInitHandle);
     xTaskCreate(SIM808_taskCheck, "modemTask", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY + 1, NULL);
     xTaskCreate(checkStorageExpiration, "expirationStorage", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY + 4, NULL);
@@ -90,17 +88,21 @@ int main(void) {
     insufficient FreeRTOS heap memory available for the idle and/or timer tasks
     to be created.  See the memory management section on the FreeRTOS web site
     for more details. */
+
     for (;;);
 }
 
 void vApplicationMallocFailedHook(void) {
     taskDISABLE_INTERRUPTS();
+    LEDA_SetHigh();
     for (;;);
+  
 }
 
 /*-----------------------------------------------------------*/
 
 void vApplicationIdleHook(void) {
+ 
 }
 
 /*-----------------------------------------------------------*/
@@ -109,7 +111,7 @@ void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) {
     (void) pcTaskName;
     (void) pxTask;
     
-    LEDA_SetHigh();
+
     taskDISABLE_INTERRUPTS();
     for (;;);
 }
@@ -117,6 +119,7 @@ void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) {
 /*-----------------------------------------------------------*/
 
 void vApplicationTickHook(void) {
+
 }
 
 /*-----------------------------------------------------------*/
@@ -128,6 +131,7 @@ void vAssertCalled(const char * pcFile, unsigned long ulLine) {
 
     (void) pcFile;
     (void) ulLine;
+    
 
     __asm volatile( "di");
     {

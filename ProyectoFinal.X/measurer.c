@@ -78,12 +78,20 @@ static uint8_t decimal;
 static TaskHandle_t measureHandle;
 static TaskHandle_t ledsHandle;
 
-uint8_t phoneMessage[5];
-uint8_t textMessage[80];
-uint8_t formattedTime[20];
-uint8_t NMEA_FRAME_BUFFER[64];
-uint8_t temperature_string[10];
-uint8_t gMapsLink[60];
+static uint8_t phoneMessage[5];
+static uint8_t textMessage[80];
+static uint8_t formattedTime[20];
+static uint8_t NMEA_FRAME_BUFFER[64];
+static uint8_t temperature_string[10];
+static uint8_t gMapsLink[60];
+static time_t exampleTime;
+static GPSPosition_t position;
+static bool isFrameValid = false;
+static bool requiredMeasure = false;
+static bool requiredLEDs = false;
+static char msTaken = 0;
+static bool naturalDeathTemp = false;
+static bool naturalDeathLEDs = false;
 
 enum measurerMachine {
     WORKING, DONE
@@ -146,101 +154,107 @@ enum measurerMachine {
     }
  */
 void measureTemp(void *p_param) {
-    char msTaken = 0;
+    msTaken = 0;
     averageMs = 0;
     linearTrans = 0;
     mState = WORKING;
     for (;;) {
-        switch (mState) {
-            case WORKING:
-                result = ADC1_GetConversion(TEMP);
-                linearTrans = (double) result * 100 / 1023;
-                linearTrans = floor(linearTrans + 0.5);
-                linearTrans = ((0.1) * linearTrans) + 32;
-                averageMs = averageMs + linearTrans;
-                msTaken++;
-                if (msTaken == 10) {
+        if (requiredMeasure) {
+            switch (mState) {
+                case WORKING:
+                    result = ADC1_GetConversion(TEMP);
+                    linearTrans = (double) result * 100 / 1023;
+                    linearTrans = floor(linearTrans + 0.5);
+                    linearTrans = ((0.1) * linearTrans) + 32;
+                    averageMs = averageMs + linearTrans;
+                    msTaken++;
+                    if (msTaken == 10) {
+                        xSemaphoreGive(semaphore);
+                        vTaskDelay(pdMS_TO_TICKS(250));
+                        averageMs = averageMs / 10;
+                        mState = DONE;
+                    }
                     xSemaphoreGive(semaphore);
                     vTaskDelay(pdMS_TO_TICKS(250));
-                    averageMs = averageMs / 10;
-                    mState = DONE;
-                }
-                xSemaphoreGive(semaphore);
-                vTaskDelay(pdMS_TO_TICKS(250));
-                break;
-            case DONE:;
-                // Store Temperature Data
+                    break;
+                case DONE:;
+                    // Store Temperature Data
+                    isFrameValid = false;
 
-                time_t exampleTime;
-                GPSPosition_t position;
-                bool isFrameValid = false;
+                    if (get_NMEAFrame(NMEA_FRAME_BUFFER)) {
+                        GPS_getPosition(&position, NMEA_FRAME_BUFFER);
+                        GPS_getUTC(getTimeHolder(), NMEA_FRAME_BUFFER);
+                        RTCC_TimeSet(getTimeHolder());
+                        exampleTime = mktime(getTimeHolder());
+                        validFrameReceived();
+                        isFrameValid = true;
+                    } else {
+                        exampleTime = INVALID_DATA;
+                    }
 
-                if (get_NMEAFrame(NMEA_FRAME_BUFFER)) {
-                    GPS_getPosition(&position, NMEA_FRAME_BUFFER);
-                    GPS_getUTC(&time_holder, NMEA_FRAME_BUFFER);
-                    exampleTime = mktime(&time_holder);
-                    isFrameValid = true;
-                } else {
-                    exampleTime = INVALID_DATA;
-                }
+                    addRegister(averageMs, &exampleTime, &position);
 
-                addRegister(averageMs, &exampleTime, &position);
+                    floatToString(averageMs, 1, temperature_string);
 
-                floatToString(averageMs, 1, temperature_string);
+                    // End Storage
+                    // Send Alert SMS
 
-                // End Storage
-                // Send Alert SMS
-                if (isPhoneSet) {
-                    if (averageMs > *getThreshold()) {
-                        if (isFrameValid) {
-                            GPS_generateGoogleMaps(gMapsLink, position);
-                            strftime(formattedTime, sizeof (formattedTime), "%d/%m/%Y %H:%M:%S", gmtime(&exampleTime));
-                            sprintf(textMessage, "%d %s %s %sC %s", *getDeviceID(), formattedTime, gMapsLink, temperature_string, STR_END);
-                        } else {
-                            sprintf(textMessage, "%d %s %sC %s", *getDeviceID(), INVALID_FRAME_MESSAGE, temperature_string, STR_END);
-                        }
+                    if (getPhoneSet()) {
+                        if (averageMs > *getThreshold()) {
+                            if (isFrameValid) {
+                                GPS_generateGoogleMaps(gMapsLink, position);
+                                strftime(formattedTime, sizeof (formattedTime), "%d/%m/%Y %H:%M:%S", gmtime(&exampleTime));
+                                sprintf(textMessage, "%d %s %s %sC %s", *getDeviceID(), formattedTime, gMapsLink, temperature_string, STR_END);
+                            } else {
+                                sprintf(textMessage, "%d %s %sC %s", *getDeviceID(), INVALID_FRAME_MESSAGE, temperature_string, STR_END);
+                            }
 
-                        if (xSemaphoreTake(c_semGSMIsReady, portMAX_DELAY) == pdTRUE) {
-                            SIM808_sendSMS(PHONE_NUMBER, textMessage);
-                            xSemaphoreGive(c_semGSMIsReady);
+                            if (xSemaphoreTake(c_semGSMIsReady, portMAX_DELAY) == pdTRUE) {
+                                SIM808_sendSMS(getPhoneNumber(), textMessage);
+                                xSemaphoreGive(c_semGSMIsReady);
+                            }
                         }
                     }
-                }
-                // End Send SMS
 
-                // Suicide-Squad
-                vTaskDelete((TaskHandle_t) p_param);
-                break;
-            default:
-                break;
+                    // End Send SMS
+
+                    // Suicide-Squad
+                    naturalDeathTemp = true;
+                    requiredMeasure = false;
+                    break;
+                default:
+                    break;
+            }
         }
-
     }
 }
 
 void manageLEDs(void *p_param) {
     for (;;) {
-        xSemaphoreTake(semaphore, pdMS_TO_TICKS(1000));
-        switch (mState) {
-            case WORKING:
-                WS2812_set_Sending_State();
-                RGB_LED_eventHandler();
-                break;
-            case DONE:
-                if (averageMs > *getThreshold()) {
-                    WS2812_indicateSafeness(true);
-                } else {
-                    WS2812_indicateSafeness(false);
-                }
-                RGB_LED_eventHandler();
-                vTaskDelay(pdMS_TO_TICKS(2000));
-                WS2812_turnOff();
+        if (requiredLEDs) {
+            xSemaphoreTake(semaphore, pdMS_TO_TICKS(1000));
+            switch (mState) {
+                case WORKING:
+                    WS2812_set_Sending_State();
+                    RGB_LED_eventHandler();
+                    break;
+                case DONE:
+                    if (averageMs > *getThreshold()) {
+                        WS2812_indicateSafeness(true);
+                    } else {
+                        WS2812_indicateSafeness(false);
+                    }
+                    RGB_LED_eventHandler();
+                    vTaskDelay(pdMS_TO_TICKS(2000));
+                    WS2812_turnOff();
 
-                // Suicide-Squad
-                vTaskDelete(ledsHandle);
-                break;
-            default:
-                break;
+                    // Suicide-Squad
+                    naturalDeathLEDs = true;
+                    requiredLEDs = false;
+                    break;
+                default:
+                    break;
+            }
         }
     }
 }
@@ -270,32 +284,30 @@ void manageLEDs(void *p_param) {
  */
 
 bool measuringTasksHandler(bool action) {
-    eTaskState measuring;
-    eTaskState showing;
+
     bool deleted = false;
 
-
     if (action) {
-
-        xTaskCreate(measureTemp, "measureTemp", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY + 1, &measureHandle);
-        xTaskCreate(manageLEDs, "manageLEDs", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY + 1, &ledsHandle);
-
+        requiredMeasure = true;
+        requiredLEDs = true;
     } else {
-
-        measuring = eTaskGetState(measureHandle);
-        showing = eTaskGetState(ledsHandle);
-
-        if (measuring != eDeleted) {
-            vTaskDelete(measureHandle);
+        
+        if (!naturalDeathTemp){
+            requiredMeasure = false;
             deleted = true;
         }
-
-        if (showing != eDeleted) {
-            vTaskDelete(ledsHandle);
+        if (!naturalDeathLEDs){
+            requiredLEDs = false;
             deleted = true;
         }
-
+        
+        averageMs = 0;
+        linearTrans = 0;
+        msTaken = 0;
+        mState = WORKING;
         WS2812_turnOff();
+        naturalDeathTemp = false;
+        naturalDeathLEDs = false;
         semaphore = xSemaphoreCreateBinary();
     }
 

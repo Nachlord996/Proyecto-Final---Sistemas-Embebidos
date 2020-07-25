@@ -66,6 +66,13 @@ static char HEAD = 0;
 
 static float THRESHOLD = 37.0;
 static uint32_t DEVICE_ID = 0;
+static bool rtcc_initialized = false;
+static struct tm time_holder;
+static bool isPhoneSet = false;
+uint8_t PHONE_NUMBER[11];
+uint8_t integerPart;
+float decimalPart;
+uint8_t cut;
 
 
 /* ************************************************************************** */
@@ -123,6 +130,10 @@ static uint32_t DEVICE_ID = 0;
         return 3;
     }
  */
+static void updateTime(struct tm* time) {
+    RTCC_TimeGet(time);
+    time->tm_isdst = -1;
+}
 
 
 /* ************************************************************************** */
@@ -157,26 +168,21 @@ void initializeStorage() {
 
 void addRegister(float temp, time_t* time, GPSPosition_t* position) {
     if (HEAD < STORAGE_ROOM) {
-        uint8_t integerPart = (uint8_t) temp;
-        float decimalPart = temp - integerPart;
-        uint8_t cut = (uint8_t) (10 * decimalPart);
+        integerPart = (uint8_t) temp;
+        decimalPart = temp - integerPart;
+        cut = (uint8_t) (10 * decimalPart);
         Log_Storage[HEAD] = (measure_register){.POSITION = *position, .TEMPERATURE_INTEGER = integerPart, .TEMPERATURE_DECIMAL = cut, .TIME = *time};
         HEAD++;
     }
 }
 
-void updateTime(struct tm* time) {
-    RTCC_TimeGet(time);
-    time->tm_isdst = -1;
-}
-
 bool getRegister(uint8_t position, uint8_t* buffer) {
     bool end = false;
-    
+
     if (position >= STORAGE_ROOM) {
         return true;
     }
-    
+
     time_t dnt = Log_Storage[position].TIME;
 
     if (dnt == NONE) {
@@ -200,21 +206,30 @@ bool getRegister(uint8_t position, uint8_t* buffer) {
     } else {
         sprintf(buffer, "%d - %d.%d°C - %s\n", position, temp_int, temp_dec, INVALID_FRAME_MESSAGE);
     }
-    
+
     return end;
 }
 
 void checkStorageExpiration(void *p_param) {
     for (;;) {
+        if (rtcc_initialized) {
         int previous_day = time_holder.tm_mday;
         vTaskDelay(pdMS_TO_TICKS(THIRTY_SECONDS));
-        updateTime(&time_holder);
-        int today = time_holder.tm_mday;
+        
+            updateTime(&time_holder);
+            int today = time_holder.tm_mday;
 
-        if (previous_day != today) {
-            initializeStorage();
+            if (previous_day != today) {
+                initializeStorage();
+            }
+        } else {
+           vTaskDelay(pdMS_TO_TICKS(THIRTY_SECONDS));
         }
     }
+}
+
+void validFrameReceived(){
+    rtcc_initialized = true;
 }
 
 float* getThreshold() {
@@ -223,6 +238,17 @@ float* getThreshold() {
 
 uint8_t* getPhoneNumber() {
     return &PHONE_NUMBER;
+}
+bool getPhoneSet(){
+    return isPhoneSet;
+}
+
+void setPhoneSet(){
+    isPhoneSet = true;
+}
+
+struct tm* getTimeHolder() {
+    return &time_holder;
 }
 
 uint32_t* getDeviceID() {

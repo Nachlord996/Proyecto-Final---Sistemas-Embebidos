@@ -198,8 +198,8 @@ bool configPhoneNumber(uint8_t* data, uint8_t length) {
         }
        
         if (result){
-            sprintf(PHONE_NUMBER,"\"%s\"", data);
-            isPhoneSet = true;
+            sprintf(getPhoneNumber(),"\"%s\"", data);
+            setPhoneSet();
         }
     }
      

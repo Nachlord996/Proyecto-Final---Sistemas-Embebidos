@@ -71,14 +71,7 @@ extern "C" {
     #define NONE 0XFF
     #define THIRTY_SECONDS 30000
     #define INVALID_DATA (-1)
-    
-
-
-    struct tm time_holder;
-    uint8_t PHONE_NUMBER[11];
-    bool isPhoneSet;
-
-
+ 
 
     // *****************************************************************************
     // *****************************************************************************
@@ -176,13 +169,17 @@ extern "C" {
         }
      */
     void initializeStorage();
-    void updateTime(struct tm* time);
     void addRegister(float temp, time_t* time, GPSPosition_t* position);
     void checkStorageExpiration(void *p_param); 
     float* getThreshold();
+    struct tm* getTimeHolder();
+    bool getPhoneSet();
+    void setPhoneSet();
+    void validFrameReceived();
     uint8_t* getPhoneNumber();
     uint32_t* getDeviceID();
     bool getRegister(uint8_t position, uint8_t* buffer);
+    
 
 
     /* Provide C++ Compatibility */

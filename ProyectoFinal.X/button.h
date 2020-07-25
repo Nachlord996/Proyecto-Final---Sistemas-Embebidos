@@ -65,7 +65,7 @@ extern "C" {
       @Remarks
         Any additional remarks
      */
-    bool buttonPressed;
+
 
 
     // *****************************************************************************

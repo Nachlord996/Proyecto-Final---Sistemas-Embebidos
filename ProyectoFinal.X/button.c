@@ -63,7 +63,7 @@
  */
 
 
-
+bool buttonPressed = false;
 enum buttonState {
     UNPRESSED, PRESSED, RELEASED
 } bState;
@@ -148,6 +148,7 @@ enum buttonState {
   @Remarks
     Refer to the example_file.h interface header for function usage details.
  */
+
 
 void isButtonPressed(void *p_param) {
     bool wasRunning;
